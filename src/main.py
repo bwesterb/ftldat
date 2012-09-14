@@ -151,7 +151,11 @@ class Program(object):
                 elif os.path.isdir(full_path):
                     s.append(os.path.join(current, child))
         print 'Create datfile ...'
-        packer = FTLDatPacker(self.args.datfile, len(files))
+        if self.args.indexsize is not None:
+            indexSize = max(self.args.indexsize, len(files))
+        else:
+            indexSize = len(files)
+        packer = FTLDatPacker(self.args.datfile, indexSize)
         print 'Packing ...'
         for _file in files:
             print ' %s' % _file
@@ -198,6 +202,8 @@ class Program(object):
                 help="The datfile to create")
         parser_pack.add_argument('folder', nargs='?', default=None,
                 help="The folder to pack. Defaults to [datfile]-unpacked")
+        parser_pack.add_argument('--indexsize', '-I', default=None, type=int,
+                help="Index size.")
         # TODO implement -f
         #parser_pack.add_argument('-f', '--force', action='store_true',
         #        help='Override existing datfile')
