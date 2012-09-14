@@ -2,6 +2,7 @@
 
 import itertools
 import argparse
+import hashlib
 import os.path
 import struct
 import sys
@@ -122,6 +123,14 @@ class Program(object):
         for i, filename, size, offset in unpacker:
             print "%-4s %-7s %-57s%10s" % (i, hex(offset)[2:], filename,
                                         nice_size(size))
+            if self.args.hashes:
+                class HashFile:
+                    def __init__(self): self.h = hashlib.md5()
+                    def write(self, s): self.h.update(s)
+                    def finish_up(self): return self.h.hexdigest()
+                hf = HashFile()
+                unpacker.extract_to(filename, hf)
+                print "        md5: %s" % hf.finish_up()
             c_size += size
             N += 1
         print
@@ -178,6 +187,8 @@ class Program(object):
         parser_info.add_argument('datfile',
                 type=argparse.FileType('rb'),
                 help='The datfile to examine')
+        parser_info.add_argument('--hashes', '-H', action='store_true',
+                help='Show MD5 hashes')
         parser_info.set_defaults(func=self.cmd_info)
 
         parser_pack = subparsers.add_parser('pack',
