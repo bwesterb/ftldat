@@ -122,7 +122,7 @@ class Program(object):
         c_size = 0
         for i, filename, size, offset in unpacker:
             print "%-4s %-7s %-57s%10s" % (i, hex(offset)[2:], filename,
-                                        nice_size(size))
+                            str(size) if self.args.bytes else nice_size(size))
             if self.args.hashes:
                 class HashFile:
                     def __init__(self): self.h = hashlib.md5()
@@ -135,7 +135,7 @@ class Program(object):
             N += 1
         print
         print '  %s/%s entries' % (N, len(unpacker.index))
-        print '  %s' % nice_size(c_size)
+        print '  %s' % str(c_size) if self.args.bytes else nice_size(c_size)
     def cmd_pack(self):
         if self.args.folder is None:
             self.args.folder = self.args.datfile.name + '-unpacked'
@@ -193,6 +193,8 @@ class Program(object):
                 help='The datfile to examine')
         parser_info.add_argument('--hashes', '-H', action='store_true',
                 help='Show MD5 hashes')
+        parser_info.add_argument('--bytes', '-B', action='store_true',
+                help='Show sizes in bytes')
         parser_info.set_defaults(func=self.cmd_info)
 
         parser_pack = subparsers.add_parser('pack',
