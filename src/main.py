@@ -14,7 +14,7 @@ def nice_size(s):
         >>> nice_size(12345)
         12 KiB
         """
-    if s <= 1024: return str(s) + ' B'
+    if s <= 1024: return str(s) + ' B  '
     s /= 1024
     if s <= 1024: return str(s) + ' KiB'
     s /= 1024
