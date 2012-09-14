@@ -8,6 +8,11 @@ import struct
 import sys
 import os
 
+def ftl_path_join(*args):
+    """ Joins paths in the way FTL expects them to be in .dat files.
+        That is: the UNIX way. """
+    return '/'.join(args)
+
 def nice_size(s):
     """ Nicely formats size.
 
@@ -140,16 +145,17 @@ class Program(object):
         if self.args.folder is None:
             self.args.folder = self.args.datfile.name + '-unpacked'
         print 'Listing files to pack ...'
-        s = ['']
+        s = [()]
         files = []
         while s:
             current = s.pop()
-            for child in os.listdir(os.path.join(self.args.folder, current)):
-                full_path = os.path.join(self.args.folder, current, child)
+            for child in os.listdir(os.path.join(self.args.folder, *current)):
+                full_path = os.path.join(self.args.folder,
+                                            *(current + (child,)))
                 if os.path.isfile(full_path):
-                    files.append(os.path.join(current, child))
+                    files.append(current + (child,))
                 elif os.path.isdir(full_path):
-                    s.append(os.path.join(current, child))
+                    s.append(current + (child,))
         print 'Create datfile ...'
         if self.args.indexsize is not None:
             indexSize = max(self.args.indexsize, len(files))
@@ -158,11 +164,11 @@ class Program(object):
         packer = FTLDatPacker(self.args.datfile, indexSize)
         print 'Packing ...'
         for _file in files:
-            print ' %s' % _file
-            full_path = os.path.join(self.args.folder, _file)
+            print ' %s' % '/'.join(_file)
+            full_path = os.path.join(self.args.folder, *_file)
             size = os.stat(full_path).st_size
             with open(full_path, 'rb') as f:
-                packer.add(_file, f, size)
+                packer.add(ftl_path_join(*_file), f, size)
     def cmd_unpack(self):
         if self.args.folder is None:
             self.args.folder = self.args.datfile.name + '-unpacked'
