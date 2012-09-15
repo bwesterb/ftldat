@@ -6,12 +6,10 @@ files of [FTL](http://ftlgame.com).
 
 Installation
 ------------
-Windows
-=======
+###Windows
 Download the installer, here: http://westerbaan.name/~bas/ftldat/ftldat-r4.exe
 
-Linux and Mac OS X
-==================
+###Linux and Mac OS X
 Simply execute
 
     pip install ftldat
