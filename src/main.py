@@ -470,7 +470,7 @@ class Program(object):
                     % self.args.target)
             return -4
         if not self.args.filename in pack:
-            print 'ERROR %s does not exist' % filename
+            print 'ERROR %s does not exist' % self.args.filename
             return -5
         try:
             if self.args.target:
