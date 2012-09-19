@@ -10,6 +10,7 @@
 import collections
 import itertools
 import argparse
+import tempfile
 import hashlib
 import os.path
 import struct
@@ -360,6 +361,10 @@ class HashFile:
         return self.h.hexdigest()
 
 class Program(object):
+    def cmd_list(self):
+        pack = FTLPack(self.args.datfile)
+        for filename in pack.list():
+            print filename
     def cmd_hashes(self):
         pack = FTLPack(self.args.datfile)
         hashes = {}
@@ -412,6 +417,94 @@ class Program(object):
         for _file, size in files:
             print " %s" % _file
             pack.add(_file, folder.open(_file), size)
+    def cmd_append(self):
+        pack = FTLPack(self.args.datfile)
+        if not os.path.exists(self.args.appendix):
+            print 'ERROR %s does not exist.' % self.args.appendix
+            return -8
+        f = None
+        try:
+            if not self.args.filename in pack:
+                if not self.args.force:
+                    print ('ERROR %s does not exist.  Use -f to add anyway'
+                            % self.args.filename)
+                    return -9
+                f = open(self.args.appendix, 'rb')
+            else:
+                f = tempfile.TemporaryFile()
+                pack.extract_to(self.args.filename, f)
+                pack.remove(self.args.filename)
+                with open(self.args.appendix, 'rb') as fi:
+                    while True:
+                        buf = fi.read(4096)
+                        if not buf:
+                            break
+                        f.write(buf)
+                f.seek(0, 0)
+            size = os.fstat(f.fileno()).st_size
+            pack.add(self.args.filename, f, size)
+        finally:
+            if f:
+                f.close()
+    def cmd_add(self):
+        pack = FTLPack(self.args.datfile)
+        if not os.path.exists(self.args.file):
+            print 'ERROR %s does not exist.' % self.args.file
+            return -7
+        if self.args.filename is None:
+            self.args.filename = ftl_path_join(*ftl_path_split(self.args.file))
+        size = os.stat(self.args.file).st_size
+        if self.args.filename in pack:
+            if not self.args.force:
+                print ('ERROR %s already exists. Use -f to replace.'
+                        % self.args.filename)
+                return -2
+            pack.remove(self.args.filename)
+        with open(self.args.file, 'rb') as f:
+            pack.add(self.args.filename, f, size)
+    def cmd_extract(self):
+        pack = FTLPack(self.args.datfile)
+        if (self.args.target and os.path.exists(self.args.target) and
+                not self.args.force):
+            print ('ERROR %s already exists.  Use -f to override.'
+                    % self.args.target)
+            return -4
+        if not self.args.filename in pack:
+            print 'ERROR %s does not exist' % filename
+            return -5
+        try:
+            if self.args.target:
+                f = open(self.args.target, 'wb')
+            else:
+                f = sys.stdout
+            pack.extract_to(self.args.filename, f)
+        finally:
+            if f is not sys.stdout:
+                f.close()
+    def cmd_remove(self):
+        pack = FTLPack(self.args.datfile)
+        if not self.args.filename in pack:
+            if not self.args.force:
+                print ('ERROR %s does not exist.'
+                        % self.args.filename)
+                return -6
+        else:
+            pack.remove(self.args.filename)
+    def cmd_replace(self):
+        pack = FTLPack(self.args.datfile)
+        if not os.path.exists(self.args.replacement):
+            print 'ERROR %s does not exist.' % self.args.replacement
+            return  -10
+        size = os.stat(self.args.replacement).st_size
+        if not self.args.filename in pack:
+            if not self.args.force:
+                print ('ERROR %s does not exist. Use -f to add anyway.'
+                        % self.args.filename)
+                return -3
+        else:
+            pack.remove(self.args.filename)
+        with open(self.args.replacement, 'rb') as f:
+            pack.add(self.args.filename, f, size)
     def cmd_unpack(self):
         if self.args.folder is None:
             self.args.folder = self.args.datfile + '-unpacked'
@@ -433,7 +526,7 @@ class Program(object):
         subparsers = parser.add_subparsers(title='commands',
                                         description='Valid commands')
         parser_info = subparsers.add_parser('info',
-                help='Shows the contents of a datfile')
+                help='Shows detailed technical information about a datfile')
         parser_info.add_argument('datfile',
                 help='The datfile to examine')
         parser_info.add_argument('--hashes', '-H', action='store_true',
@@ -464,12 +557,77 @@ class Program(object):
                 help='Override existing files')
         parser_unpack.set_defaults(func=self.cmd_unpack)
 
-        parser_hashes= subparsers.add_parser('hashes',
+        parser_add = subparsers.add_parser('add',
+                help='Add a single file to a datfile')
+        parser_add.add_argument('datfile',
+                help='The datfile to add the file to')
+        parser_add.add_argument('file',
+                help='The file to add')
+        parser_add.add_argument('filename', nargs='?', default=None,
+                help='The filename the file will have in the datfile.  '+
+                     'Defaults to [file]')
+        parser_add.add_argument('-f', '--force', action='store_true',
+                help='Overrides [filename] if it already exists')
+        parser_add.set_defaults(func=self.cmd_add)
+
+        parser_append = subparsers.add_parser('append',
+                help='Append a file to an existing file in the datfile')
+        parser_append.add_argument('datfile',
+                help='The datfile')
+        parser_append.add_argument('filename',
+                help='The file to append to')
+        parser_append.add_argument('appendix',
+                help='The file to append')
+        parser_append.add_argument('-f', '--force', action='store_true',
+                help='Create [filename] if it did not exist')
+        parser_append.set_defaults(func=self.cmd_append)
+
+        parser_replace = subparsers.add_parser('replace',
+                help='Replace a single file in the datfile')
+        parser_replace.add_argument('datfile',
+                help='The datfile to replace the file to')
+        parser_replace.add_argument('replacement',
+                help='The file to replace [filename] with')
+        parser_replace.add_argument('filename',
+                help='The filename of the file to replace in the datfile')
+        parser_replace.add_argument('-f', '--force', action='store_true',
+                help='Adds [replacement] even if [filename] does not exist')
+        parser_replace.set_defaults(func=self.cmd_replace)
+
+        parser_remove = subparsers.add_parser('remove',
+                help='Removes a file from the datfile')
+        parser_remove.add_argument('datfile',
+                help='The datfile to remove the file from')
+        parser_remove.add_argument('filename',
+                help='The filename of the file to remove')
+        parser_remove.add_argument('-f', '--force', action='store_true',
+                help='Do not error when [filename] does not exist')
+        parser_remove.set_defaults(func=self.cmd_remove)
+
+        parser_extract = subparsers.add_parser('extract',
+                help='Extract a single file from a datfile')
+        parser_extract.add_argument('datfile',
+                help='The datfile to extract from')
+        parser_extract.add_argument('filename',
+                help='The filename of the file to extract')
+        parser_extract.add_argument('target', nargs='?', default=None,
+                help='The file to extract to.  Defaults to stdout')
+        parser_extract.add_argument('-f', '--force', action='store_true',
+                help='Overrides [target] if it already exists')
+        parser_extract.set_defaults(func=self.cmd_extract)
+
+        parser_hashes = subparsers.add_parser('hashes',
                 help='Shows the filenames and their md5 hashes alphabetically.'+
                      '  Useful for debugging.')
         parser_hashes.add_argument('datfile',
                 help='The datfile to examine')
         parser_hashes.set_defaults(func=self.cmd_hashes)
+
+        parser_list = subparsers.add_parser('list',
+                help='Lists the filenames in the datfile')
+        parser_list.add_argument('datfile',
+                help='The datfile to examine')
+        parser_list.set_defaults(func=self.cmd_list)
 
         self.args = parser.parse_args()
 
