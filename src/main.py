@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# ftldat r5
+# ftldat r6
 #
 #   (c) 2012 - Bas Westerbaan <bas@westerbaan.name>
 #
