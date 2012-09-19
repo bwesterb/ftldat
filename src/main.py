@@ -336,6 +336,7 @@ class FTLPack(object):
         self.index[n] = 0
         self.index_free.append(n)
         self.metadata[n] = None
+        del self.filenames[filename]
         # Write to file
         self.f.seek(n*4+4, 0)
         self.f.write(struct.pack('<L', 0))
