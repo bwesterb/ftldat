@@ -1,4 +1,4 @@
-!define version "r4"
+!define version "r5"
 
 !include "AddToPath.nsh"
 
