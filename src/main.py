@@ -349,7 +349,29 @@ class FTLPack(object):
         return [(n, x.filename, x.size, x.offset)
                     for n, x in enumerate(self.metadata) if x]
 
+class HashFile:
+    """ Helper class.  Data written to this virtual file is hashed. """
+    def __init__(self):
+        self.h = hashlib.md5()
+    def write(self, s):
+        self.h.update(s)
+    def finish_up(self):
+        return self.h.hexdigest()
+
 class Program(object):
+    def cmd_hashes(self):
+        pack = FTLPack(self.args.datfile)
+        hashes = {}
+        # First generate hashes sequentially
+        for filename in pack.list():
+            hf = HashFile()
+            pack.extract_to(filename, hf)
+            hashes[filename] = hf.finish_up()
+        filenames = hashes.keys()
+        # Then sort and display
+        filenames.sort()
+        for filename in filenames:
+            print '%s %s' % (filename, hashes[filename])
     def cmd_info(self):
         print 'Loading index ...'
         pack = FTLPack(self.args.datfile)
@@ -361,10 +383,6 @@ class Program(object):
             print "%-4s %-7s %-57s%10s" % (i, hex(offset)[2:], filename,
                             str(size) if self.args.bytes else nice_size(size))
             if self.args.hashes:
-                class HashFile:
-                    def __init__(self): self.h = hashlib.md5()
-                    def write(self, s): self.h.update(s)
-                    def finish_up(self): return self.h.hexdigest()
                 hf = HashFile()
                 pack.extract_to(filename, hf)
                 print "        md5: %s" % hf.finish_up()
@@ -444,6 +462,13 @@ class Program(object):
         parser_unpack.add_argument('-f', '--force', action='store_true',
                 help='Override existing files')
         parser_unpack.set_defaults(func=self.cmd_unpack)
+
+        parser_hashes= subparsers.add_parser('hashes',
+                help='Shows the filenames and their md5 hashes alphabetically.'+
+                     '  Useful for debugging.')
+        parser_hashes.add_argument('datfile',
+                help='The datfile to examine')
+        parser_hashes.set_defaults(func=self.cmd_hashes)
 
         self.args = parser.parse_args()
 
