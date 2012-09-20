@@ -350,6 +350,85 @@ class FTLPack(object):
         """ Returns a list of quadruples (idx, filename, size, offset) """
         return [(n, x.filename, x.size, x.offset)
                     for n, x in enumerate(self.metadata) if x]
+    def repack(self):
+        """ Repacks the datfile.  This will remove overhead, which could
+            be created when adding, removing or replacing files. """
+        # Create the new index
+        entry = collections.namedtuple('repack_entry',
+                            ('old_n', 'old_offset', 'filename', 'size',
+                                    'new_offset'))
+        result = collections.namedtuple('result',
+                            ('bytes_moved', 'old_size', 'new_size'))
+        bytes_moved = 0
+        old_size = self.eof
+        entries = [entry(old_n=n,
+                         old_offset=addr,
+                         filename=self.metadata[n].filename,
+                         size=self.metadata[n].size,
+                         new_offset=None)
+                        for n, addr in enumerate(self.index) if addr]
+        entries.sort(key=lambda x: x.old_offset)
+        # Check for overlap
+        for i in xrange(len(entries) - 1):
+            if (entries[i].old_offset + entries[i].size
+                    > entries[i+1].old_offset):
+                raise FTLDatError("Cannot repack datfile with overlapping "+
+                                  "entries")
+        # Create new layout
+        offset = 4 + len(entries) * 4
+        for n, entry in enumerate(entries):
+            entries[n] = entry._replace(new_offset=offset)
+            offset += entry.size + len(entry.filename) + 8
+        new_total_size = offset
+        # Write new index
+        assert len(entries) <= len(self.index)
+        if len(entries) == len(self.index):
+            skipped = True
+        else:
+            self.f.seek(0, 0)
+            self.f.write(struct.pack('<L', len(entries)))
+            bytes_moved += 4
+            skipped = False
+        for n, entry in enumerate(entries):
+            if entry.new_offset == self.index[n]:
+                skipped = True
+            else:
+                if skipped:
+                    self.f.seek(4 + 4 * n, 0)
+                self.f.write(struct.pack('<L', entry.new_offset))
+                bytes_moved += 4
+                skipped = False
+        # Move files
+        for entry in entries:
+            # Do not move the file, if we do not need to
+            if entry.new_offset == entry.old_offset:
+                continue
+            size = entry.size + 8 + len(entry.filename)
+            todo = size
+            bytes_moved += todo
+            assert entry.new_offset < entry.old_offset
+            while todo:
+                self.f.seek(entry.old_offset + size - todo, 0)
+                buf = self.f.read(min(4096, todo))
+                self.f.seek(entry.new_offset + size - todo, 0)
+                self.f.write(buf)
+                todo -= len(buf)
+        # Truncate the ftldat!
+        self.f.truncate(new_total_size)
+        # Update state
+        self.eof = new_total_size
+        self.index = [entry.new_offset for entry in entries]
+        self.metadata = [ftldat_entry(
+                            filename=entry.filename,
+                            size=entry.size,
+                            offset=entry.new_offset + 8 + len(entry.filename))
+                                for entry in entries]
+        self.filenames = {}
+        for n, entry in enumerate(entries):
+            self.filenames[entry.filename] = n
+        self.index_free = []
+        return result(old_size=old_size, new_size=new_total_size,
+                        bytes_moved=bytes_moved)
 
 class HashFile:
     """ Helper class.  Data written to this virtual file is hashed. """
@@ -481,6 +560,19 @@ class Program(object):
         finally:
             if f is not sys.stdout:
                 f.close()
+    def cmd_repack(self):
+        print 'Repacking ...'
+        pack = FTLPack(self.args.datfile)
+        res = pack.repack()
+        print
+        print ' old size      %s (%s)' % (nice_size(res.old_size),
+                                          res.old_size)
+        print ' new size      %s (%s; %s%%)' % (
+                            nice_size(res.new_size), res.new_size,
+                        round(100.0 * res.new_size / res.old_size, 1))
+        print ' bytes moved   %s (%s; %s%%)' % (
+                            nice_size(res.bytes_moved), res.bytes_moved,
+                        round(100.0 * res.bytes_moved / res.new_size, 1))
     def cmd_remove(self):
         pack = FTLPack(self.args.datfile)
         if not self.args.filename in pack:
@@ -622,6 +714,12 @@ class Program(object):
         parser_hashes.add_argument('datfile',
                 help='The datfile to examine')
         parser_hashes.set_defaults(func=self.cmd_hashes)
+
+        parser_repack = subparsers.add_parser('repack',
+                help='Repacks the datfile: removes overhead')
+        parser_repack.add_argument('datfile',
+                help='The datfile to repack')
+        parser_repack.set_defaults(func=self.cmd_repack)
 
         parser_list = subparsers.add_parser('list',
                 help='Lists the filenames in the datfile')
