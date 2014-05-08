@@ -7,7 +7,9 @@ files of [FTL](http://ftlgame.com).
 Installation
 ------------
 ###Windows
-Download the installer, here: http://westerbaan.name/~bas/ftldat/ftldat-latest.exe
+<del>Download the installer, here: http://westerbaan.name/~bas/ftldat/ftldat-latest.exe</del>
+
+Several antivirusscanners falsely identify pyinstaller created executables as viruses.  Hence I've removed the file to prevent my domain from being blacklisted erroneously.
 
 ###Linux and Mac OS X
 Simply execute
